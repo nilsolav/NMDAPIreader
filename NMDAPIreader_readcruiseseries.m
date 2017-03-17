@@ -28,6 +28,7 @@ options = weboptions('ContentType','xmldom');
 rssURL = 'http://tomcat7.imr.no:8080/apis/nmdapi/cruiseseries/v1';
 dom = webread(rssURL, options);
 s = dom2struct(dom);
+dd='\\ces.imr.no\cruise_data\';
 
 %% Extract survey time series
 cs=length(s.list.element);
@@ -102,7 +103,25 @@ for i = 1:length(D)
                 cruisedom = webread(D(i).sampletime(j).Cruise(k).url, options);
                 cruise   = dom2struct(cruisedom);
                 D(i).sampletime(j).Cruise(k).cruise = cruise.cruise;
-                if isfield(cruise.cruise,'datapath')
+                
+                % This is a hack to get the directories
+                ds = fullfile(dd,D(i).sampletime(j).sampletime);
+
+                hack=false;
+                if exist(ds)
+                    cr=dir(ds);
+                    crn=['S',D(i).sampletime(j).Cruise(k).cruisenr];
+                    for n=1:length(cr)
+                        if length(cr(n).name)>length(crn) && strcmp(cr(n).name(1:length(crn)),crn)
+                            D(i).sampletime(j).Cruise(k).cruise.datapath.Text = fullfile(cr(n).folder,cr(n).name);
+                            hack=true;
+                            warning('Datapath found via hack')
+                        end
+                    end
+                end
+                % End of hack
+
+                if isfield(cruise.cruise,'datapath')||hack
                     if isempty(D(i).sampletime(j).Cruise(k).cruise.datapath.Text)
 %                        warning(['Datapath content is missing for ',D(i).sampletime(j).Cruise(k).url])
                         D(i).sampletime(j).Cruise(k).cruise.datapath.Comment = 'datapathFieldEmpty';

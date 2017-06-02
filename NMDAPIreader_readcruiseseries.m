@@ -20,7 +20,17 @@ function D=NMDAPIreader_readcruiseseries
 %
 % datapath
 % D(1).sampletime(1).Cruise(1).cruise.datapath.Text    : Path to data
-% D(1).sampletime(1).Cruise(1).cruise.datapath.Comment : Result from parsing calisto
+% D(1).sampletime(1).Cruise(1).cruise.datapath.Comment : Result from
+% parsing calisto, with these error messages:
+% "CruiseMissingInAPIorFolder" : Can't get the cruise data from the API
+% "surveyNotfoundInFolder" : Survey not found in the data structure
+% "NoWorkDir"   : Work directory is missing (folder structure not used)
+% "NoWorkDir"   : Raw direcotry is missing (folder structure not used)
+% "NoSnapFiles" : No snap files in standard location
+% "NoRawFiles" : No raw files in standard location
+%
+% D(1).sampletime(1).Cruise(1).cruise.datapath.rawfiles : Number of raw files in standard location
+% D(1).sampletime(1).Cruise(1).cruise.datapath.snapfiles  : Number of snap files in standard location
 
 
 %% Loop over cruise series
@@ -93,71 +103,93 @@ end
 %% Extract cruises and links to calisto
 
 for i = 1:length(D)
+    % for each cruise series
     disp([D(i).name])
     for j=1:length(D(i).sampletime)
-%        disp(['  ',D(i).sampletime(j).sampletime])
+        %        disp(['  ',D(i).sampletime(j).sampletime])
         for k=1:length(D(i).sampletime(j).Cruise)
-%            disp(['    ',D(i).sampletime(j).Cruise(k).cruisenr,D(i).sampletime(j).Cruise(k).shipName])
-            if ~strcmp(D(i).sampletime(j).Cruise(k).url,'NaN')
+            %            disp(['    ',D(i).sampletime(j).Cruise(k).cruisenr,D(i).sampletime(j).Cruise(k).shipName])
+            
+            if strcmp(D(i).sampletime(j).Cruise(k).url,'NaN')
+                % If the cruise url is missing (should not happen...)
+                D(i).sampletime(j).Cruise(k).cruise.datapath.Comment = 'CruiseMissingInAPIorFolder';
+            else
+                % Read the cruise from the API
                 options = weboptions('ContentType','xmldom');
                 cruisedom = webread(D(i).sampletime(j).Cruise(k).url, options);
                 cruise   = dom2struct(cruisedom);
                 D(i).sampletime(j).Cruise(k).cruise = cruise.cruise;
                 
-                % This is a hack to get the directories
+                % Build the directory path from the cruise structure
+                
+                % Path to the right year
                 ds = fullfile(dd,D(i).sampletime(j).sampletime);
-
+                % Tthe name of the survey
+                crn=['S',D(i).sampletime(j).Cruise(k).cruisenr];
+                
+                % This is a hack to get the directories since I don't have
+                % the platform name. I need to traverse the directories to
+                % seach for the filename. If not found, I use the survey
+                % number only and give an error message.
                 hack=false;
                 if exist(ds)
                     cr=dir(ds);
-                    crn=['S',D(i).sampletime(j).Cruise(k).cruisenr];
                     for n=1:length(cr)
                         if length(cr(n).name)>length(crn) && strcmp(cr(n).name(1:length(crn)),crn)
                             D(i).sampletime(j).Cruise(k).cruise.datapath.Text = fullfile(cr(n).folder,cr(n).name);
                             hack=true;
-                            warning('Datapath found via hack')
                         end
                     end
                 end
-                % End of hack
-
-                if isfield(cruise.cruise,'datapath')||hack
-                    if isempty(D(i).sampletime(j).Cruise(k).cruise.datapath.Text)
-%                        warning(['Datapath content is missing for ',D(i).sampletime(j).Cruise(k).url])
-                        D(i).sampletime(j).Cruise(k).cruise.datapath.Comment = 'datapathFieldEmpty';
-                        D(i).sampletime(j).Cruise(k).cruise.datapath.Text = '';
-                    else
-                        % All is good?
-                        d = exist(D(i).sampletime(j).Cruise(k).cruise.datapath.Text);
-                        if d==0
-                            D(i).sampletime(j).Cruise(k).cruise.datapath.Comment = 'datapathDirectoryDoesNotExist';
-                        else
-                            d2 = exist(fullfile(D(i).sampletime(j).Cruise(k).cruise.datapath.Text,'ACOUSTIC_DATA\EK60\EK60_RAWDATA'));
-                            d3 = exist(fullfile(D(i).sampletime(j).Cruise(k).cruise.datapath.Text,'ACOUSTIC_DATA\LSSS\WORK'));
-                            if d2==0&&d3~=0
-                                D(i).sampletime(j).Cruise(k).cruise.datapath.Comment = 'EKdataNotInStandardLocation';
-                            elseif d2~=0&&d3==0
-                                D(i).sampletime(j).Cruise(k).cruise.datapath.Comment = 'SnapFilesNotInStandardLocation';
-                            elseif d2==0&&d3==0
-                                D(i).sampletime(j).Cruise(k).cruise.datapath.Comment = 'EK&SnapFilesNotInStandardLocation';
-                            else
-                                D(i).sampletime(j).Cruise(k).cruise.datapath.Comment = '';
-                            end
-                        end
-                    end
+                
+                if ~hack
+                    D(i).sampletime(j).Cruise(k).cruise.datapath.Text = fullfile(ds,crn);
+                    D(i).sampletime(j).Cruise(k).cruise.datapath.Comment = 'surveyNotfoundInFolder';
                 else
-%                   warning(['Datapath field is missing for ',D(i).sampletime(j).Cruise(k).url])
-                    D(i).sampletime(j).Cruise(k).cruise.datapath.Comment = 'datapathFieldMissing';
-                    D(i).sampletime(j).Cruise(k).cruise.datapath.Text = '';
+                    
+                    %
+                    % Search for raw data
+                    %
+                    
+                    % Search for EK60 files
+                    no_raw=-1;
+                    dir2=fullfile(D(i).sampletime(j).Cruise(k).cruise.datapath.Text,'ACOUSTIC_DATA\EK60\EK60_RAWDATA');
+                    if exist(dir2)
+                        no_raw=length(dir(fullfile(dir2,'*.raw')));
+                        if no_raw==0
+                            tmp='NoRawFiles';
+                        else
+                            tmp='';
+                        end
+                    else
+                        tmp='NoRawDir';
+                    end
+                    
+                    % Search for snap files
+                    no_snap = -1;
+                    dir3 = fullfile(D(i).sampletime(j).Cruise(k).cruise.datapath.Text,'ACOUSTIC_DATA\LSSS\WORK');
+                    if exist(dir3)
+                        no_snap=length(dir(fullfile(dir3,'*.snap')));
+                        if no_snap==0
+                            tmp2='NoSnapFiles';
+                        else
+                            tmp2='';
+                        end
+                    else
+                        tmp2='NoWorkDir';
+                    end
+                    
+                    % Add to output structure
+                    D(i).sampletime(j).Cruise(k).cruise.datapath.Comment = [tmp,' ',tmp2];
+                    D(i).sampletime(j).Cruise(k).cruise.datapath.rawfiles = no_raw;
+                    D(i).sampletime(j).Cruise(k).cruise.datapath.snapfiles = no_snap;
                 end
-            else
-                D(i).sampletime(j).Cruise(k).cruise.datapath.Comment = 'CruiseMissing';
-                D(i).sampletime(j).Cruise(k).cruise.datapath.Text = '';
-            end
-        end
-    end
+            end % End if exist
+        end % End cruise
+    end % End year
+end % End series
 end
-end
+
 
 function [ s ] = dom2struct(dom)
 %Convert DOM into a MATLAB structure
@@ -189,132 +221,132 @@ function [ s ] = dom2struct(dom)
 % Modified by X. Mo, University of Wisconsin, 12-5-2012
 % Modified by NO Handegard, IMR, 17-3-2017
 
-    
-    %parse xDoc into a MATLAB structure
-    s = parseChildNodes(dom);
-    
+
+%parse xDoc into a MATLAB structure
+s = parseChildNodes(dom);
+
 end
 
 % ----- Subfunction parseChildNodes -----
 function [children,ptext,textflag] = parseChildNodes(theNode)
-    % Recurse over node children.
-    children = struct;
-    ptext = struct; textflag = 'Text';
-    if hasChildNodes(theNode)
-        childNodes = getChildNodes(theNode);
-        numChildNodes = getLength(childNodes);
-
-        for count = 1:numChildNodes
-            theChild = item(childNodes,count-1);
-            [text,name,attr,childs,textflag] = getNodeData(theChild);
-            
-            if (~strcmp(name,'#text') && ~strcmp(name,'#comment') && ~strcmp(name,'#cdata_dash_section'))
-                %XML allows the same elements to be defined multiple times,
-                %put each in a different cell
-                if (isfield(children,name))
-                    if (~iscell(children.(name)))
-                        %put existsing element into cell format
-                        children.(name) = {children.(name)};
-                    end
-                    index = length(children.(name))+1;
-                    %add new element
-                    children.(name){index} = childs;
-                    if(~isempty(fieldnames(text)))
-                        children.(name){index} = text; 
-                    end
-                    if(~isempty(attr)) 
-                        children.(name){index}.('Attributes') = attr; 
-                    end
-                else
-                    %add previously unknown (new) element to the structure
-                    children.(name) = childs;
-                    if(~isempty(text) && ~isempty(fieldnames(text)))
-                        children.(name) = text; 
-                    end
-                    if(~isempty(attr)) 
-                        children.(name).('Attributes') = attr; 
-                    end
+% Recurse over node children.
+children = struct;
+ptext = struct; textflag = 'Text';
+if hasChildNodes(theNode)
+    childNodes = getChildNodes(theNode);
+    numChildNodes = getLength(childNodes);
+    
+    for count = 1:numChildNodes
+        theChild = item(childNodes,count-1);
+        [text,name,attr,childs,textflag] = getNodeData(theChild);
+        
+        if (~strcmp(name,'#text') && ~strcmp(name,'#comment') && ~strcmp(name,'#cdata_dash_section'))
+            %XML allows the same elements to be defined multiple times,
+            %put each in a different cell
+            if (isfield(children,name))
+                if (~iscell(children.(name)))
+                    %put existsing element into cell format
+                    children.(name) = {children.(name)};
+                end
+                index = length(children.(name))+1;
+                %add new element
+                children.(name){index} = childs;
+                if(~isempty(fieldnames(text)))
+                    children.(name){index} = text;
+                end
+                if(~isempty(attr))
+                    children.(name){index}.('Attributes') = attr;
                 end
             else
-                ptextflag = 'Text';
-                if (strcmp(name, '#cdata_dash_section'))
-                    ptextflag = 'CDATA';
-                elseif (strcmp(name, '#comment'))
-                    ptextflag = 'Comment';
+                %add previously unknown (new) element to the structure
+                children.(name) = childs;
+                if(~isempty(text) && ~isempty(fieldnames(text)))
+                    children.(name) = text;
                 end
-                
-                %this is the text in an element (i.e., the parentNode) 
-                if (~isempty(regexprep(text.(textflag),'[\s]*','')))
-                    if (~isfield(ptext,ptextflag) || isempty(ptext.(ptextflag)))
-                        ptext.(ptextflag) = text.(textflag);
-                    else
-                        %what to do when element data is as follows:
-                        %<element>Text <!--Comment--> More text</element>
-                        
-                        %put the text in different cells:
-                        % if (~iscell(ptext)) ptext = {ptext}; end
-                        % ptext{length(ptext)+1} = text;
-                        
-                        %just append the text
-                        ptext.(ptextflag) = [ptext.(ptextflag) text.(textflag)];
-                    end
+                if(~isempty(attr))
+                    children.(name).('Attributes') = attr;
                 end
             end
+        else
+            ptextflag = 'Text';
+            if (strcmp(name, '#cdata_dash_section'))
+                ptextflag = 'CDATA';
+            elseif (strcmp(name, '#comment'))
+                ptextflag = 'Comment';
+            end
             
+            %this is the text in an element (i.e., the parentNode)
+            if (~isempty(regexprep(text.(textflag),'[\s]*','')))
+                if (~isfield(ptext,ptextflag) || isempty(ptext.(ptextflag)))
+                    ptext.(ptextflag) = text.(textflag);
+                else
+                    %what to do when element data is as follows:
+                    %<element>Text <!--Comment--> More text</element>
+                    
+                    %put the text in different cells:
+                    % if (~iscell(ptext)) ptext = {ptext}; end
+                    % ptext{length(ptext)+1} = text;
+                    
+                    %just append the text
+                    ptext.(ptextflag) = [ptext.(ptextflag) text.(textflag)];
+                end
+            end
         end
+        
     end
+end
 end
 
 % ----- Subfunction getNodeData -----
 function [text,name,attr,childs,textflag] = getNodeData(theNode)
-    % Create structure of node info.
-    
-    %make sure name is allowed as structure name
-    name = toCharArray(getNodeName(theNode))';
-    name = strrep(name, '-', '_dash_');
-    name = strrep(name, ':', '_colon_');
-    name = strrep(name, '.', '_dot_');
+% Create structure of node info.
 
-    attr = parseAttributes(theNode);
-    if (isempty(fieldnames(attr))) 
-        attr = []; 
-    end
-    
-    %parse child nodes
-    [childs,text,textflag] = parseChildNodes(theNode);
-    
-    if (isempty(fieldnames(childs)) && isempty(fieldnames(text)))
-        %get the data of any childless nodes
-        % faster than if any(strcmp(methods(theNode), 'getData'))
-        % no need to try-catch (?)
-        % faster than text = char(getData(theNode));
-        text.(textflag) = toCharArray(getTextContent(theNode))';
-    end
-    
+%make sure name is allowed as structure name
+name = toCharArray(getNodeName(theNode))';
+name = strrep(name, '-', '_dash_');
+name = strrep(name, ':', '_colon_');
+name = strrep(name, '.', '_dot_');
+
+attr = parseAttributes(theNode);
+if (isempty(fieldnames(attr)))
+    attr = [];
+end
+
+%parse child nodes
+[childs,text,textflag] = parseChildNodes(theNode);
+
+if (isempty(fieldnames(childs)) && isempty(fieldnames(text)))
+    %get the data of any childless nodes
+    % faster than if any(strcmp(methods(theNode), 'getData'))
+    % no need to try-catch (?)
+    % faster than text = char(getData(theNode));
+    text.(textflag) = toCharArray(getTextContent(theNode))';
+end
+
 end
 
 % ----- Subfunction parseAttributes -----
 function attributes = parseAttributes(theNode)
-    % Create attributes structure.
+% Create attributes structure.
 
-    attributes = struct;
-    if hasAttributes(theNode)
-       theAttributes = getAttributes(theNode);
-       numAttributes = getLength(theAttributes);
-
-       for count = 1:numAttributes
-            %attrib = item(theAttributes,count-1);
-            %attr_name = regexprep(char(getName(attrib)),'[-:.]','_');
-            %attributes.(attr_name) = char(getValue(attrib));
-
-            %Suggestion of Adrian Wanner
-            str = toCharArray(toString(item(theAttributes,count-1)))';
-            k = strfind(str,'='); 
-            attr_name = str(1:(k(1)-1));
-            attr_name = strrep(attr_name, '-', '_dash_');
-            attr_name = strrep(attr_name, ':', '_colon_');
-            attr_name = strrep(attr_name, '.', '_dot_');
-            attributes.(attr_name) = str((k(1)+2):(end-1));
-       end
+attributes = struct;
+if hasAttributes(theNode)
+    theAttributes = getAttributes(theNode);
+    numAttributes = getLength(theAttributes);
+    
+    for count = 1:numAttributes
+        %attrib = item(theAttributes,count-1);
+        %attr_name = regexprep(char(getName(attrib)),'[-:.]','_');
+        %attributes.(attr_name) = char(getValue(attrib));
+        
+        %Suggestion of Adrian Wanner
+        str = toCharArray(toString(item(theAttributes,count-1)))';
+        k = strfind(str,'=');
+        attr_name = str(1:(k(1)-1));
+        attr_name = strrep(attr_name, '-', '_dash_');
+        attr_name = strrep(attr_name, ':', '_colon_');
+        attr_name = strrep(attr_name, '.', '_dot_');
+        attributes.(attr_name) = str((k(1)+2):(end-1));
     end
+end
 end

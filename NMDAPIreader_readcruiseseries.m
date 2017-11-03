@@ -113,7 +113,6 @@ for i = 1:length(D)
         %        disp(['  ',D(i).sampletime(j).sampletime])
         for k=1:length(D(i).sampletime(j).Cruise)
             %            disp(['    ',D(i).sampletime(j).Cruise(k).cruisenr,D(i).sampletime(j).Cruise(k).shipName])
-            
             if strcmp(D(i).sampletime(j).Cruise(k).url,'NaN')
                 % If the cruise url is missing (should not happen...)
                 D(i).sampletime(j).Cruise(k).cruise.datapath.Comment = 'CruiseMissingInAPIorFolder';
@@ -183,15 +182,29 @@ for i = 1:length(D)
                         tmp2='NoWorkDir';
                     end
                     
+                    % Search for lsss files
+                    no_lsss = -1;
+                    dir4 = fullfile(D(i).sampletime(j).Cruise(k).cruise.datapath.Text,'ACOUSTIC_DATA\LSSS\LSSS_FILES');
+                    if exist(dir4)
+                        no_lsss=length(dir(fullfile(dir4,'*.lsss')));
+                        if no_lsss==0
+                            tmp2='NoLSSSFile';
+                        else
+                            tmp2='';
+                        end
+                    else
+                        tmp2='NoWorkDir';
+                    end
                     % Add to output structure
                     D(i).sampletime(j).Cruise(k).cruise.datapath.Comment = [tmp,' ',tmp2];
                     D(i).sampletime(j).Cruise(k).cruise.datapath.rawfiles = no_raw;
                     D(i).sampletime(j).Cruise(k).cruise.datapath.snapfiles = no_snap;
+                    D(i).sampletime(j).Cruise(k).cruise.datapath.lsssfile = no_lsss;
                 end
             end % End if exist
-        end % End cruise
-    end % End year
-end % End series
+        end % End cruise k
+    end % End year j
+end % End series i
 end
 
 

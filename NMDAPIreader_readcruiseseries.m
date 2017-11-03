@@ -38,7 +38,11 @@ options = weboptions('ContentType','xmldom');
 rssURL = 'http://tomcat7.imr.no:8080/apis/nmdapi/cruiseseries/v1';
 dom = webread(rssURL, options);
 s = dom2struct(dom);
-dd='\\ces.imr.no\cruise_data\';
+if isunix
+    dd='/data/cruise_data/';
+else
+    dd='\\ces.imr.no\cruise_data\';
+end
 
 %% Extract survey time series
 cs=length(s.list.element);
@@ -152,7 +156,7 @@ for i = 1:length(D)
                     
                     % Search for EK60 files
                     no_raw=-1;
-                    dir2=fullfile(D(i).sampletime(j).Cruise(k).cruise.datapath.Text,'ACOUSTIC_DATA\EK60\EK60_RAWDATA');
+                    dir2=fullfile(D(i).sampletime(j).Cruise(k).cruise.datapath.Text,'ACOUSTIC_DATA/EK60/EK60_RAWDATA');
                     if exist(dir2)
                         no_raw=length(dir(fullfile(dir2,'*.raw')));
                         if no_raw==0
@@ -166,7 +170,7 @@ for i = 1:length(D)
                     
                     % Search for snap files
                     no_snap = -1;
-                    dir3 = fullfile(D(i).sampletime(j).Cruise(k).cruise.datapath.Text,'ACOUSTIC_DATA\LSSS\WORK');
+                    dir3 = fullfile(D(i).sampletime(j).Cruise(k).cruise.datapath.Text,'ACOUSTIC_DATA/LSSS/WORK');
                     if exist(dir3)
                         no_snap=length(dir(fullfile(dir3,'*.snap')));
                         if no_snap==0

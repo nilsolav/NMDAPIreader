@@ -1,4 +1,4 @@
-function filecount=NMDAPIreader_getLSSSdatastatus(directory,par)
+function [filecount,files]=NMDAPIreader_getLSSSdatastatus(directory,par)
 %
 % counts LSSS and raw files in the cruise directory
 %
@@ -16,6 +16,17 @@ function filecount=NMDAPIreader_getLSSSdatastatus(directory,par)
 % filecount(5) : Number of snap files in non standard location
 % filecount(6) : Number of work files in non standard location
 %
+% files(1) : List of raw files 
+% files(2) : List of snap files 
+% files(3) : List of work files 
+%
+
+if nargin==1
+    par.raw_dir=[];
+    par.snap_dir=[];
+    par.work_dir =[];
+end
+
 
 filecount = zeros([1 4]);
 % Does the standard directory structure exist and are there any files?
@@ -50,5 +61,6 @@ filecount(5) = length(d5) - filecount(2);
 d6 = rdir(fullfile(directory,'/**/*.work'));
 filecount(6) = length(d6) - filecount(3);
 
-
-
+files.raw  =  d4;
+files.snap = d5;
+files.work = d6;

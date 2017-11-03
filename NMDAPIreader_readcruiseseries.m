@@ -184,15 +184,15 @@ for i = 1:length(D)
                     if exist(dir4)
                         no_lsss=length(dir(fullfile(dir4,'*.lsss')));
                         if no_lsss==0
-                            tmp2='NoLSSSFile';
+                            tmp3='NoLSSSFile';
                         else
-                            tmp2='';
+                            tmp3='';
                         end
                     else
-                        tmp2='NoWorkDir';
+                        tmp3='NoLSSSDir';
                     end
                     % Add to output structure
-                    D(i).sampletime(j).Cruise(k).cruise.datapath.Comment = [tmp,' ',tmp2];
+                    D(i).sampletime(j).Cruise(k).cruise.datapath.Comment = [tmp,' ',tmp2,' ',tmp3];
                     D(i).sampletime(j).Cruise(k).cruise.datapath.rawfiles = no_raw;
                     D(i).sampletime(j).Cruise(k).cruise.datapath.snapfiles = no_snap;
                     D(i).sampletime(j).Cruise(k).cruise.datapath.lsssfile = no_lsss;

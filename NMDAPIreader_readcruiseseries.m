@@ -12,14 +12,11 @@ function D=NMDAPIreader_readcruiseseries
 % D(1).sampletime(1).sampletime  : The time stamp (usually year)
 %
 % Cruises
-% D(i).sampletime(j).Cruise(k).cruisenr : Cruise number
-% D(i).sampletime(j).Cruise(k).shipName : Paltform name
-% D(i).sampletime(j).Cruise(k).url      : API url to survey
-%
-% D(i).sampletime(j).Cruise(k).cruise   : Metainformation for survey
+% D(i).sampletime(j).Cruise(k).cruisenr      : Cruise number
+% D(i).sampletime(j).Cruise(k).shipName      : Platform name
 %
 % datapath
-% D(1).sampletime(1).Cruise(1).cruise.datapath.Text    : Path to data
+% D(1).sampletime(1).Cruise(1).cruise.datapath.path    : Path to data
 % D(1).sampletime(1).Cruise(1).cruise.datapath.Comment : Result from
 % parsing calisto, with these error messages:
 % "CruiseMissingInAPIorFolder" : Can't get the cruise data from the API
@@ -35,9 +32,11 @@ function D=NMDAPIreader_readcruiseseries
 
 %% Loop over cruise series
 options = weboptions('ContentType','xmldom');
-rssURL = 'http://tomcat7.imr.no:8080/apis/nmdapi/cruiseseries/v1';
+rssURL = 'http://tomcat7.imr.no:8080/apis/nmdapi/reference/v2/dataset/cruiseseries?version=2.0';
 dom = webread(rssURL, options);
 s = dom2struct(dom);
+
+
 if isunix
     dd='/data/cruise_data/';
 else
@@ -45,64 +44,49 @@ else
 end
 
 %% Extract survey time series
-cs=length(s.list.element);
-for i = 1:cs
-    D(i).name = s.list.element{i}.result.Text;
-    rssURLs = ['http://tomcat7.imr.no:8080/apis/nmdapi/cruiseseries/v1/',D(i).name];
-    D(i).url = rssURLs;
-end
 
-%% Extract surveys per survey time series
+cs=length(s.list.row);
 for i = 1:cs
-    options = weboptions('ContentType','xmldom');
-    doms = webread(D(i).url, options);
-    s   = dom2struct(doms);
-    for j=1:length(s.CruiseSerie.Samples.Sample)
-        D(i).sampletime(j).sampletime = s.CruiseSerie.Samples.Sample{j}.Attributes.sampleTime;
-        for k= 1:length(s.CruiseSerie.Samples.Sample{j}.Cruises.Cruise)
-            if length(s.CruiseSerie.Samples.Sample{j}.Cruises.Cruise)==1
+    D(i).name = s.list.row{i}.name.Text;
+    for j=1:length(s.list.row{i}.samples.sample)
+        D(i).sampletime(j).sampletime = s.list.row{i}.samples.sample{j}.sampleTime.Text;
+        for k= 1:length(s.list.row{i}.samples.sample{j}.cruises.cruise)
+            if length(s.list.row{i}.samples.sample{j}.cruises.cruise)==1
                 try
-                    D(i).sampletime(j).Cruise(k).cruisenr = s.CruiseSerie.Samples.Sample{j}.Cruises.Cruise.Attributes.cruisenr;
+                    D(i).sampletime(j).Cruise(k).cruisenr = s.list.row{i}.samples.sample{j}.cruises.cruise.cruisenr.Text;
                 catch
-                    warning(['missing cruisenr in year ',s.CruiseSerie.Samples.Sample{j}.Attributes.sampleTime,' for cruise ',num2str(k),' in cruise series ',s.CruiseSerie.Attributes.cruiseseriename])
+                    warning(['missing cruisenr in year ',s.list.row{i}.samples.sample{j}.sampleTime.Text,' for cruise ',num2str(k),' in cruise series ',s.list.row{i}.name.Text])
                 end
                 try
-                    D(i).sampletime(j).Cruise(k).shipName = s.CruiseSerie.Samples.Sample{j}.Cruises.Cruise.Attributes.shipName;
+                    D(i).sampletime(j).Cruise(k).shipName = s.list.row{i}.samples.sample{j}.cruises.cruise.shipName.Text;
                 catch
-                    warning(['missing ship name in year ',s.CruiseSerie.Samples.Sample{j}.Attributes.sampleTime,' for cruise ',num2str(k),' in cruise series ',s.CruiseSerie.Attributes.cruiseseriename])
+                    warning(['missing ship name in year ',s.list.row{i}.samples.sample{j}.sampleTime.Text,' for cruise ',num2str(k),' in cruise series ',s.list.row{i}.name.Text])
                 end
             else
                 try
-                    D(i).sampletime(j).Cruise(k).cruisenr = s.CruiseSerie.Samples.Sample{j}.Cruises.Cruise{k}.Attributes.cruisenr;
+                    D(i).sampletime(j).Cruise(k).cruisenr = s.list.row{i}.samples.sample{j}.cruises.cruise{k}.cruisenr.Text;
                 catch
-                    warning(['missing cruisenr in year ',s.CruiseSerie.Samples.Sample{j}.Attributes.sampleTime,' for cruise ',num2str(k),' in cruise series ',s.CruiseSerie.Attributes.cruiseseriename])
+                    warning(['missing cruisenr in year ',s.list.row{i}.samples.sample{j}.sampleTime.Text,' for cruise ',num2str(k),' in cruise series ',s.list.row{i}.name.Text])
                 end
                 try
-                    D(i).sampletime(j).Cruise(k).shipName = s.CruiseSerie.Samples.Sample{j}.Cruises.Cruise{k}.Attributes.shipName;
+                    D(i).sampletime(j).Cruise(k).shipName = s.list.row{i}.samples.sample{j}.cruises.cruise{k}.shipName.Text;
                 catch
-                    warning(['missing ship name in year ',s.CruiseSerie.Samples.Sample{j}.Attributes.sampleTime,' for cruise ',num2str(k),' in cruise series ',s.CruiseSerie.Attributes.cruiseseriename])
+                    warning(['missing ship name in year ',s.list.row{i}.samples.sample{j}.sampleTime.Text,' for cruise ',num2str(k),' in cruise series ',s.list.row{i}.name.Text])
                 end
             end
-            if isfield(D(i).sampletime(j).Cruise(k),'cruisenr')&&isfield(D(i).sampletime(j).Cruise(k),'shipName')
-                findurl = ['http://tomcat7.imr.no:8080/apis/nmdapi/cruise/v1/find?cruisenr=',D(i).sampletime(j).Cruise(k).cruisenr,'&shipname=',D(i).sampletime(j).Cruise(k).shipName];
-            elseif isfield(D(i).sampletime(j).Cruise(k),'cruisenr')
-                findurl = ['http://tomcat7.imr.no:8080/apis/nmdapi/cruise/v1/find?cruisenr=',D(i).sampletime(j).Cruise(k).cruisenr];
-            elseif isfield(D(i).sampletime(j).Cruise(k),'shipName')
-                findurl = ['http://tomcat7.imr.no:8080/apis/nmdapi/cruise/v1/find?shipname=',D(i).sampletime(j).Cruise(k).shipName];
+            
+            % Find the platform code to build data url for the cruise
+            p = fullfile(dd,D(i).sampletime(j).sampletime,['S',D(i).sampletime(j).Cruise(k).cruisenr,'*']);
+            dds = ls(p);
+            if size(dds,1)~=1
+                D(i).sampletime(j).Cruise(k).datapath.path = 'NaN';
             else
-                findurl = ['http://tomcat7.imr.no:8080/apis/nmdapi/cruise/v1/find? THIS IS BULLOCKS'];
-            end
-            try
-                dom = webread(findurl, options);
-                s2 = dom2struct(dom);
-                D(i).sampletime(j).Cruise(k).url = s2.optionList.element.Text;
-            catch
-                warning([findurl,': Not found'])
-                D(i).sampletime(j).Cruise(k).url = 'NaN';
+                D(i).sampletime(j).Cruise(k).datapath.path = fullfile(dd,D(i).sampletime(j).sampletime,dds);
             end
         end
     end
 end
+
 
 %% Extract cruises and links to calisto
 
@@ -113,99 +97,63 @@ for i = 1:length(D)
         %        disp(['  ',D(i).sampletime(j).sampletime])
         for k=1:length(D(i).sampletime(j).Cruise)
             %            disp(['    ',D(i).sampletime(j).Cruise(k).cruisenr,D(i).sampletime(j).Cruise(k).shipName])
-            if strcmp(D(i).sampletime(j).Cruise(k).url,'NaN')
+            if strcmp(D(i).sampletime(j).Cruise(k).datapath.path,'NaN')
                 % If the cruise url is missing (should not happen...)
                 D(i).sampletime(j).Cruise(k).cruise.datapath.Comment = 'CruiseMissingInAPIorFolder';
             else
-                % Read the cruise from the API
-                options = weboptions('ContentType','xmldom');
-                cruisedom = webread(D(i).sampletime(j).Cruise(k).url, options);
-                cruise   = dom2struct(cruisedom);
-                D(i).sampletime(j).Cruise(k).cruise = cruise.cruise;
                 
-                % Build the directory path from the cruise structure
-                
-                % Path to the right year
-                ds = fullfile(dd,D(i).sampletime(j).sampletime);
-                % Tthe name of the survey
-                crn=['S',D(i).sampletime(j).Cruise(k).cruisenr];
-                
-                % This is a hack to get the directories since I don't have
-                % the platform name. I need to traverse the directories to
-                % seach for the filename. If not found, I use the survey
-                % number only and give an error message.
-                hack=false;
-                if exist(ds)
-                    cr=dir(ds);
-                    for n=1:length(cr)
-                        if length(cr(n).name)>length(crn) && strcmp(cr(n).name(1:length(crn)),crn)
-                            D(i).sampletime(j).Cruise(k).cruise.datapath.Text = fullfile(cr(n).folder,cr(n).name);
-                            hack=true;
-                        end
+                % Search for EK60 files
+                no_raw=-1;
+                dir2=fullfile(D(i).sampletime(j).Cruise(k).datapath.path,'ACOUSTIC_DATA/EK60/EK60_RAWDATA');
+                if exist(dir2)
+                    no_raw=length(dir(fullfile(dir2,'*.raw')));
+                    if no_raw==0
+                        tmp='NoRawFiles';
+                    else
+                        tmp='';
                     end
-                end
-                
-                if ~hack
-                    D(i).sampletime(j).Cruise(k).cruise.datapath.Text = fullfile(ds,crn);
-                    D(i).sampletime(j).Cruise(k).cruise.datapath.Comment = 'surveyNotfoundInFolder';
                 else
-                    
-                    %
-                    % Search for raw data
-                    %
-                    
-                    % Search for EK60 files
-                    no_raw=-1;
-                    dir2=fullfile(D(i).sampletime(j).Cruise(k).cruise.datapath.Text,'ACOUSTIC_DATA/EK60/EK60_RAWDATA');
-                    if exist(dir2)
-                        no_raw=length(dir(fullfile(dir2,'*.raw')));
-                        if no_raw==0
-                            tmp='NoRawFiles';
-                        else
-                            tmp='';
-                        end
-                    else
-                        tmp='NoRawDir';
-                    end
-                    
-                    % Search for snap files
-                    no_snap = -1;
-                    dir3 = fullfile(D(i).sampletime(j).Cruise(k).cruise.datapath.Text,'ACOUSTIC_DATA/LSSS/WORK');
-                    if exist(dir3)
-                        no_snap=length(dir(fullfile(dir3,'*.snap')));
-                        if no_snap==0
-                            tmp2='NoSnapFiles';
-                        else
-                            tmp2='';
-                        end
-                    else
-                        tmp2='NoWorkDir';
-                    end
-                    
-                    % Search for lsss files
-                    no_lsss = -1;
-                    dir4 = fullfile(D(i).sampletime(j).Cruise(k).cruise.datapath.Text,'ACOUSTIC_DATA\LSSS\LSSS_FILES');
-                    if exist(dir4)
-                        no_lsss=length(dir(fullfile(dir4,'*.lsss')));
-                        if no_lsss==0
-                            tmp3='NoLSSSFile';
-                        else
-                            tmp3='';
-                        end
-                    else
-                        tmp3='NoLSSSDir';
-                    end
-                    % Add to output structure
-                    D(i).sampletime(j).Cruise(k).cruise.datapath.Comment = [tmp,' ',tmp2,' ',tmp3];
-                    D(i).sampletime(j).Cruise(k).cruise.datapath.rawfiles = no_raw;
-                    D(i).sampletime(j).Cruise(k).cruise.datapath.snapfiles = no_snap;
-                    D(i).sampletime(j).Cruise(k).cruise.datapath.lsssfile = no_lsss;
+                    tmp='NoRawDir';
                 end
+                
+                % Search for snap files
+                no_snap = -1;
+                dir3 = fullfile(D(i).sampletime(j).Cruise(k).datapath.path,'ACOUSTIC_DATA/LSSS/WORK');
+                if exist(dir3)
+                    no_snap=length(dir(fullfile(dir3,'*.snap')));
+                    if no_snap==0
+                        tmp2='NoSnapFiles';
+                    else
+                        tmp2='';
+                    end
+                else
+                    tmp2='NoWorkDir';
+                end
+                
+                % Search for lsss files
+                no_lsss = -1;
+                dir4 = fullfile(D(i).sampletime(j).Cruise(k).datapath.path,'ACOUSTIC_DATA\LSSS\LSSS_FILES');
+                if exist(dir4)
+                    no_lsss=length(dir(fullfile(dir4,'*.lsss')));
+                    if no_lsss==0
+                        tmp3='NoLSSSFile';
+                    else
+                        tmp3='';
+                    end
+                else
+                    tmp3='NoLSSSDir';
+                end
+                % Add to output structure
+                D(i).sampletime(j).Cruise(k).cruise.datapath.Comment = [tmp,' ',tmp2,' ',tmp3];
+                D(i).sampletime(j).Cruise(k).cruise.datapath.rawfiles = no_raw;
+                D(i).sampletime(j).Cruise(k).cruise.datapath.snapfiles = no_snap;
+                D(i).sampletime(j).Cruise(k).cruise.datapath.lsssfile = no_lsss;
             end % End if exist
         end % End cruise k
     end % End year j
 end % End series i
-end
+end % End function
+
 
 
 function [ s ] = dom2struct(dom)
